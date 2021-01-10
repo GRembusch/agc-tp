@@ -118,8 +118,7 @@ def get_chunks(sequence, chunk_size):
         chunks.append(sequence[i:i+chunk_size])
     if len(chunks) >= 4:
         return chunks
-    else:
-        return None
+    return None
 
 def get_unique(ids):
     return {}.fromkeys(ids).keys()
@@ -176,7 +175,7 @@ def get_identity(alignment_list):
     for i in range(len(seq1)):
         if seq1[i] == seq2[i]:
             nb_identical += 1
-    return (nb_identical / len(seq1) * 100)
+    return nb_identical / len(seq1) * 100
 
 def detect_chimera(perc_identity_matrix):
     """Determines if a sequence is a chimera or not.
@@ -268,15 +267,15 @@ def fill(text, width=80):
     """Split text with a line return to respect fasta format"""
     return os.linesep.join(text[i:i+width] for i in range(0, len(text), width))
 
-def write_OTU(OTU_list, output_file):
+def write_OTU(otu_list, output_file):
     """Write the OTU in a file.
       :Parameters:
-          OTU_list: List of OTU to write.
+          otu_list: List of OTU to write.
           output_file: Path to the file in which to write.
     """
     index = 0
     with open(output_file, "w") as myfile:
-        for sequence, count in OTU_list:
+        for sequence, count in otu_list:
             myfile.write(">OTU_"+str(index+1)+" occurrence:"+ str(count) + "\n")
             myfile.write(fill(str(sequence)))
             myfile.write("\n")
