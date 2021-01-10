@@ -69,7 +69,6 @@ def get_arguments():
                         default="OTU.fasta", help="Output file")
     return parser.parse_args()
 
-
 def read_fasta(amplicon_file, minseqlen):
     """Generator that reads the given file.
       :Parameters:
@@ -77,18 +76,19 @@ def read_fasta(amplicon_file, minseqlen):
           minseqlen: Minimal sequence length (integer)
     """
     myfile = gzip.open(amplicon_file)
-    for line in myfile: # >Name
-        sequence = ''
-        current_line = str(line)[2:-3]
-        if current_line == '':
+    sequence = ''
+    for line in myfile:
+        cut_line = str(line)[2:-3] #remove b'...\n'
+        if cut_line == '':
+            if len(sequence) >= minseqlen:
+                yield sequence
             break
-        if current_line[0] == '>':
-            current_line = str(next(myfile))[2:-3]
-        while current_line != '' and current_line[0] != '>':
-            sequence += current_line
-            current_line = str(next(myfile))[2:-3]
-        if len(sequence) >= minseqlen:
-            yield sequence
+        if cut_line[0] == ">":
+            if len(sequence) >= minseqlen:
+                yield sequence
+            sequence = ''
+        else:
+            sequence += cut_line
 
 
 def dereplication_fulllength(amplicon_file, minseqlen, mincount):
@@ -103,7 +103,6 @@ def dereplication_fulllength(amplicon_file, minseqlen, mincount):
         seq_dict[sequence] += 1
     sorted_occurences = sorted(seq_dict.items(), key = lambda kv: kv[1], reverse=True)
     sorted_dict = dict(sorted_occurences)
-    print(sorted_dict)
     for key in sorted_dict:
         if seq_dict[key] >= mincount:
             yield key, seq_dict[key]
@@ -233,7 +232,7 @@ def chimera_removal(amplicon_file, minseqlen, mincount, chunk_size, kmer_size):
     id_sequence = 0
     perc_identity_matrix = []
 
-    for sequence, index in sequence_generator:
+    for sequence, count in sequence_generator:
         chunks = get_chunks(sequence, chunk_size)[:4]
         mates = []
         parents = []
@@ -249,17 +248,41 @@ def chimera_removal(amplicon_file, minseqlen, mincount, chunk_size, kmer_size):
             kmer_dict = get_unique_kmer(kmer_dict,sequence,id_sequence, kmer_size)
             sequence_bank.append(sequence)
             id_sequence +=1
-            yield [sequence, index]
+            yield [sequence, count]
 
 def abundance_greedy_clustering(amplicon_file, minseqlen, mincount, chunk_size, kmer_size):
-    pass
+    """Regroup sequences into a greedy clustering.
+      :Parameters:
+          amplicon_file: fasta.gz file to read.
+          minseqlen: Minimal sequence length (integer).
+          mincount: minimum number of sequences (integer).
+          chunk_size: Size of chunks.
+          kmer_size: size of kmers.
+    """
+    greedy_clustering = []
+    for seq_and_count in chimera_removal(amplicon_file,minseqlen,mincount,chunk_size,kmer_size):
+        greedy_clustering.append(seq_and_count)
+    return greedy_clustering
 
 def fill(text, width=80):
     """Split text with a line return to respect fasta format"""
     return os.linesep.join(text[i:i+width] for i in range(0, len(text), width))
 
 def write_OTU(OTU_list, output_file):
-    pass
+    """Write the OTU in a file.
+      :Parameters:
+          OTU_list: List of OTU to write.
+          output_file: Path to the file in which to write.
+    """
+    index = 0
+    with open(output_file, "w") as myfile:
+        for sequence, count in OTU_list:
+            myfile.write(">OTU_"+str(index+1)+" occurrence:"+ str(count) + "\n")
+            myfile.write(fill(str(sequence)))
+            myfile.write("\n")
+            index += 1
+
+
 #==============================================================
 # Main program
 #==============================================================
@@ -269,9 +292,11 @@ def main():
     """
     # Get arguments
     args = get_arguments()
-    for [key,value] in dereplication_fulllength(args.amplicon_file,200,3):
-        print(key)
-
+    amplicon_file = args.amplicon_file
+    if isfile(amplicon_file):
+        otu_cluster = abundance_greedy_clustering(amplicon_file, args.minseqlen,args.mincount,
+            args.chunk_size,args.kmer_size)
+        write_OTU(otu_cluster, args.output_file)
 
 if __name__ == '__main__':
     main()
